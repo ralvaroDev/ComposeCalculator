@@ -71,7 +71,6 @@ fun ExtendedTheme(
             }
         )
     }
-
 }
 
 object ExtendedTheme {

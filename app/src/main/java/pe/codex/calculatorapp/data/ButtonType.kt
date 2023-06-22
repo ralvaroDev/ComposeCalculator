@@ -6,6 +6,7 @@ sealed class ButtonType {
     object EraseLast: ButtonType()
     object Reset: ButtonType()
     object Dot: ButtonType()
+    object Invert: ButtonType()
 }
 
 sealed class OperationType {

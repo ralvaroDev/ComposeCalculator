@@ -1,6 +1,5 @@
 package pe.codex.calculatorapp.ui
 
-import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,12 +24,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -38,7 +40,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.codex.calculatorapp.R
 import pe.codex.calculatorapp.data.ButtonType
+import pe.codex.calculatorapp.data.OperationType
+import pe.codex.calculatorapp.data.UiState
 import pe.codex.calculatorapp.data.digitList
 import pe.codex.calculatorapp.data.operationList
 import pe.codex.calculatorapp.ui.theme.Cyan
@@ -46,16 +53,45 @@ import pe.codex.calculatorapp.ui.theme.ExtendedTheme
 import pe.codex.calculatorapp.ui.theme.Red
 
 @Composable
-fun CalculatorScreen(modifier: Modifier = Modifier) {
+fun CalculatorApp(
+    modifier: Modifier = Modifier,
+    viewModel: CalculatorViewModel = hiltViewModel(),
+    onNightModeChange: () -> Unit
+) {
+    val uiState: UiState by viewModel.uiState.collectAsStateWithLifecycle()
+    CalculatorScreen(
+        modifier = modifier,
+        uiState = uiState,
+        onDigitAdded = viewModel::digitAdded,
+        onOperationClicked = viewModel::doOperation,
+        onReset = viewModel::resetOperation,
+        onEraseLast = viewModel::eraseLast,
+        onInvert = viewModel::invertPart,
+        onNightModeChange = onNightModeChange
+    )
+}
+
+@Composable
+fun CalculatorScreen(
+    modifier: Modifier = Modifier,
+    uiState: UiState,
+    onDigitAdded: (String) -> Unit,
+    onOperationClicked: (ButtonType.Operation) -> Unit,
+    onReset: () -> Unit,
+    onEraseLast: () -> Unit,
+    onInvert: () -> Unit,
+    onNightModeChange: () -> Unit
+) {
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(color = ExtendedTheme.colors.background)
     ) {
         ThemeModeCard(
             Modifier
                 .align(CenterHorizontally)
-                .padding(top = 16.dp)
+                .padding(top = 16.dp),
+            onClick = onNightModeChange
         )
         Column(
             modifier = Modifier
@@ -66,36 +102,59 @@ fun CalculatorScreen(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.Bottom
         ) {
             OperationTable(
-                modifier =Modifier,
-                firstPart = "308",
-                secondPart = "42",
-                operation = "x"
+                modifier = Modifier,
+                firstPart = uiState.operation1,
+                secondPart = uiState.operation2,
+                operation = uiState.operationType?.symbol
             )
-            Text(text = "12,936", fontSize = 54.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = uiState.result.take(8),
+                fontSize = 54.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
         }
-        ButtonContainer()
+        ButtonContainer(
+            onDigitAdded = onDigitAdded,
+            onOperationClicked = onOperationClicked,
+            onReset = onReset,
+            onEraseLast = onEraseLast,
+            onInvert = onInvert
+        )
     }
 }
 
 @Composable
-fun OperationTable(modifier: Modifier = Modifier, firstPart: String, secondPart: String, operation: String) {
+fun OperationTable(
+    modifier: Modifier = Modifier,
+    firstPart: String,
+    secondPart: String,
+    operation: String?
+) {
     Text(text = buildAnnotatedString {
-        withStyle(style = SpanStyle()){
+        withStyle(style = SpanStyle()) {
             append(firstPart)
         }
         append(" ")
-        withStyle(style = SpanStyle(color = Red)){
-            append(operation)
+        withStyle(style = SpanStyle(color = Red)) {
+            append(operation ?: "")
         }
         append(" ")
-        withStyle(style = SpanStyle()){
+        withStyle(style = SpanStyle()) {
             append(secondPart)
         }
-    }, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+    }, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, modifier = modifier)
 }
 
 @Composable
-fun ButtonContainer(modifier: Modifier = Modifier) {
+fun ButtonContainer(
+    modifier: Modifier = Modifier,
+    onDigitAdded: (String) -> Unit,
+    onOperationClicked: (ButtonType.Operation) -> Unit,
+    onReset: () -> Unit,
+    onInvert: () -> Unit,
+    onEraseLast: () -> Unit
+) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = ExtendedTheme.colors.backgroundVariant),
@@ -105,9 +164,15 @@ fun ButtonContainer(modifier: Modifier = Modifier) {
             //Digitos y reset
             Column(modifier = Modifier.weight(0.75f)) {
                 Row(Modifier.fillMaxWidth()) {
-                    DigitButton(buttonType = ButtonType.Reset, modifier = Modifier.weight(1f))
-                    DigitButton(buttonType = ButtonType.Reset, modifier = Modifier.weight(1f))
-                    DigitButton(buttonType = ButtonType.Reset, modifier = Modifier.weight(1f))
+                    RectangleDigitButton(
+                        modifier = Modifier.weight(2f),
+                        onClick = onReset
+                    )
+                    DigitButton(
+                        buttonType = ButtonType.Invert,
+                        modifier = Modifier.weight(1f),
+                        onClick = onInvert
+                    )
                 }
 
                 LazyVerticalGrid(
@@ -116,16 +181,25 @@ fun ButtonContainer(modifier: Modifier = Modifier) {
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
                     item {
-                        DigitButton(buttonType = ButtonType.EraseLast)
+                        DigitButton(buttonType = ButtonType.EraseLast, onClick = onEraseLast)
                     }
                     item {
-                        DigitButton(buttonType = ButtonType.Number("0"))
+                        DigitButton(
+                            buttonType = ButtonType.Number("0"),
+                            onClick = { onDigitAdded("0") })
                     }
                     item {
-                        DigitButton(buttonType = ButtonType.Dot)
+                        DigitButton(
+                            buttonType = ButtonType.Dot,
+                            onClick = { onDigitAdded(".") }
+                        )
                     }
                     items(items = digitList, key = { item -> item.value }) {
-                        DigitButton(buttonType = it, modifier = Modifier.weight(1f))
+                        DigitButton(
+                            buttonType = it,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onDigitAdded(it.value) }
+                        )
                     }
                 }
             }
@@ -134,8 +208,11 @@ fun ButtonContainer(modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(0.25f),
                 horizontalAlignment = CenterHorizontally
             ) {
-                items(items = operationList, key = { item -> item.symbol }) {
-                    DigitButton(buttonType = it)
+                items(
+                    items = operationList,
+                    //key = { item -> item.symbol }
+                ) {
+                    DigitButton(buttonType = it, onClick = { onOperationClicked(it) })
                 }
             }
 
@@ -144,9 +221,28 @@ fun ButtonContainer(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun DigitButton(modifier: Modifier = Modifier, buttonType: ButtonType) {
+fun RectangleDigitButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
     Button(
-        onClick = {},
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = ExtendedTheme.colors.background),
+        modifier = modifier
+            .aspectRatio(2f)
+            .padding(6.dp),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Text(
+            text = "AC",
+            color = Cyan,
+            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp
+        )
+    }
+}
+
+@Composable
+fun DigitButton(modifier: Modifier = Modifier, buttonType: ButtonType, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
         colors = ButtonDefaults.buttonColors(containerColor = ExtendedTheme.colors.background),
         modifier = modifier
             .aspectRatio(1f)
@@ -173,17 +269,16 @@ fun DigitButton(modifier: Modifier = Modifier, buttonType: ButtonType) {
                 fontWeight = FontWeight.Bold, fontSize = fontSizeee
             )
 
-            ButtonType.Reset -> Text(
-                text = "AC",
-                color = Cyan,
-                fontWeight = FontWeight.Bold,
-                fontSize = fontSizeee
-            )
-
             ButtonType.Dot -> Text(
                 text = ".",
                 color = ExtendedTheme.colors.onBackground,
                 fontWeight = FontWeight.Bold, fontSize = fontSizeee
+            )
+
+            else -> Icon(
+                painter = painterResource(id = R.drawable.ic_plus_minus),
+                contentDescription = "",
+                tint = Cyan
             )
         }
     }
@@ -193,17 +288,24 @@ fun DigitButton(modifier: Modifier = Modifier, buttonType: ButtonType) {
 @Composable
 fun ButtonContainerPreview() {
     ExtendedTheme {
-        ButtonContainer()
+        ButtonContainer(
+            onDigitAdded = {},
+            onOperationClicked = {},
+            onReset = {},
+            onEraseLast = {}, onInvert = {}
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ThemeModeCard(modifier: Modifier = Modifier) {
+fun ThemeModeCard(modifier: Modifier = Modifier, onClick: () -> Unit) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = ExtendedTheme.colors.backgroundVariant
-        )
+        ),
+        onClick = onClick
     ) {
         Row(modifier = Modifier.padding(6.dp), horizontalArrangement = Arrangement.SpaceAround) {
             Icon(
@@ -226,13 +328,26 @@ fun ThemeModeCard(modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun ThemeModeCardPreview() {
-    ExtendedTheme { ThemeModeCard() }
+    ExtendedTheme { ThemeModeCard(onClick = {}) }
 }
 
-@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_YES)
+@Preview(showBackground = true)
 @Composable
 fun CalculatorScreenPreview() {
-    ExtendedTheme {
-        CalculatorScreen()
+    ExtendedTheme(darkTheme = true) {
+        CalculatorScreen(
+            uiState = UiState(
+                operation1 = "24",
+                operation2 = "255",
+                operationType = ButtonType.Operation(OperationType.Add, "+"),
+                result = "32435"
+            ),
+            onDigitAdded = {},
+            onOperationClicked = {},
+            onReset = {},
+            onEraseLast = {},
+            onInvert = {},
+            onNightModeChange = {}
+        )
     }
 }
